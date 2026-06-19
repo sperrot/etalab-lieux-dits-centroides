@@ -1,0 +1,13 @@
+# Sorties du script (volumineuses, à régénérer)
+*.gpkg
+*.json.gz
+compile_log.txt
+
+# Python
+__pycache__/
+*.pyc
+
+# Divers
+.claude/
+gis-blender-resources/
+1.12.1
