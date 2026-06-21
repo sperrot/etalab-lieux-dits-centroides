@@ -9,6 +9,7 @@ Source : https://cadastre.data.gouv.fr/data/etalab-cadastre/<DATE>/geojson/depar
 import gzip
 import io
 import os
+import re
 import sys
 import time
 import urllib.request
@@ -25,6 +26,26 @@ LAYER = "lieux_dits_centroides"
 # Codes départements : 01..95 sauf le 20 (Corse = 2A / 2B)
 codes = [f"{i:02d}" for i in range(1, 96) if i != 20] + ["2A", "2B"]
 codes.sort()
+
+
+# Apostrophes typographiques / variantes -> apostrophe droite
+_APOS = str.maketrans({"’": "'", "‘": "'", "´": "'", "`": "'"})
+# Article élidé écrit avec une espace : "L ETANG" -> "L'ETANG", "MONT D OR" -> "MONT D'OR"
+_ELISION = re.compile(r"(?<![^\W\d_])([LDld])\s+(?=[^\W\d_])")
+
+
+def normalize_nom(nom):
+    """Nettoyage orthographique sûr (préserve la casse d'origine)."""
+    if nom is None:
+        return None
+    s = str(nom)
+    s = s.translate(_APOS)             # apostrophes typographiques -> '
+    s = s.replace("_", " ")            # underscores -> espace
+    s = re.sub(r"\s+", " ", s).strip() # espaces multiples -> un seul
+    s = re.sub(r"\s*'\s*", "'", s)     # recolle apostrophe espacée : "L ' ETANG" -> "L'ETANG"
+    s = re.sub(r"\s*-\s*", "-", s)     # recolle tiret espacé : "BEL - AIR" -> "BEL-AIR"
+    s = _ELISION.sub(r"\1'", s)        # article élidé écrit avec espace : "L ETANG" -> "L'ETANG"
+    return s
 
 
 def fetch(code, retries=3):
@@ -77,6 +98,11 @@ def main():
         cent = gdf.to_crs(2154).geometry.centroid
         gdf = gdf.set_geometry(cent).to_crs(4326)
         gdf["dep"] = code
+
+        # Nettoyage orthographique sûr -> nouvelle colonne nom_clean (à côté de nom)
+        if "nom" in gdf.columns:
+            gdf.insert(gdf.columns.get_loc("nom") + 1,
+                       "nom_clean", gdf["nom"].map(normalize_nom))
 
         n = len(gdf)
         total_pts += n
