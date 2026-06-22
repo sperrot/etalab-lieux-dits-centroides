@@ -32,6 +32,26 @@ codes.sort()
 _APOS = str.maketrans({"’": "'", "‘": "'", "´": "'", "`": "'"})
 # Article élidé écrit avec une espace : "L ETANG" -> "L'ETANG", "MONT D OR" -> "MONT D'OR"
 _ELISION = re.compile(r"(?<![^\W\d_])([LDld])\s+(?=[^\W\d_])")
+# Au moins une lettre (Unicode)
+_HAS_LETTER = re.compile(r"[^\W\d_]")
+
+
+def _degroup(group):
+    """Recolle une suite de caractères isolés : "C O U L A U D" -> "COULAUD"."""
+    toks = [t for t in group.split(" ") if t]
+    if len(toks) >= 2 and all(len(t) == 1 for t in toks):
+        return "".join(toks)
+    return " ".join(toks)
+
+
+def _despace(s):
+    """Recolle les noms écrits lettre par lettre, en gardant les mots séparés.
+
+    Les mots sont délimités par des espaces multiples ("A   L A" = deux mots),
+    les lettres d'un mot par une espace simple ("L A" = "LA").
+    À exécuter AVANT la règle d'élision pour éviter "C O U L A U D" -> "C O U L'A U D".
+    """
+    return " ".join(_degroup(g) for g in re.split(r" {2,}", s))
 
 
 def normalize_nom(nom):
@@ -41,10 +61,16 @@ def normalize_nom(nom):
     s = str(nom)
     s = s.translate(_APOS)             # apostrophes typographiques -> '
     s = s.replace("_", " ")            # underscores -> espace
+    s = s.replace("(", " ").replace(")", " ")  # parenthèses supprimées
+    s = _despace(s)                    # recolle les lettres isolées AVANT l'élision
     s = re.sub(r"\s+", " ", s).strip() # espaces multiples -> un seul
     s = re.sub(r"\s*'\s*", "'", s)     # recolle apostrophe espacée : "L ' ETANG" -> "L'ETANG"
     s = re.sub(r"\s*-\s*", "-", s)     # recolle tiret espacé : "BEL - AIR" -> "BEL-AIR"
     s = _ELISION.sub(r"\1'", s)        # article élidé écrit avec espace : "L ETANG" -> "L'ETANG"
+    s = re.sub(r"^\W+", "", s)         # supprime caractères spéciaux en tête : "- BLAISOT" -> "BLAISOT"
+    s = re.sub(r"\W+$", "", s).strip() # ... et en fin
+    if not _HAS_LETTER.search(s):      # "?", ".", "9999" -> aucun mot, on vide
+        return ""
     return s
 
 
