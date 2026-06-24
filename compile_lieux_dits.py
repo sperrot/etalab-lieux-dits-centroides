@@ -2,8 +2,9 @@
 # -*- coding: utf-8 -*-
 """
 Télécharge les lieux-dits cadastraux (GeoJSON gzippé) de tous les départements
-métropolitains, calcule le centroïde de chaque polygone et empile le tout
-dans un unique GeoPackage de points.
+métropolitains, calcule pour chaque polygone un point représentatif (garanti à
+l'intérieur de la géométrie) et empile le tout dans un unique GeoPackage de
+points.
 Source : https://cadastre.data.gouv.fr/data/etalab-cadastre/<DATE>/geojson/departements/<XX>/cadastre-<XX>-lieux_dits.json.gz
 """
 import gzip
@@ -120,9 +121,11 @@ def main():
         if gdf.crs is None:
             gdf = gdf.set_crs(4326)
 
-        # Centroïde calculé en Lambert-93 (projeté) puis reprojeté en 4326
-        cent = gdf.to_crs(2154).geometry.centroid
-        gdf = gdf.set_geometry(cent).to_crs(4326)
+        # Point représentatif : garanti à l'intérieur de la géométrie
+        # (GEOS InteriorPointArea), contrairement au centroïde qui peut tomber
+        # hors d'un polygone concave ou multipartie. Indépendant du CRS pour
+        # l'inclusion : calculé directement en WGS84, pas de reprojection.
+        gdf = gdf.set_geometry(gdf.geometry.representative_point())
         gdf["dep"] = code
 
         # Nettoyage orthographique sûr -> nouvelle colonne nom_clean (à côté de nom)

@@ -1,9 +1,10 @@
-# Lieux-dits cadastraux → centroïdes (France métropolitaine)
+# Lieux-dits cadastraux → points (France métropolitaine)
 
 Script Python qui télécharge les **lieux-dits cadastraux** (GeoJSON gzippé) de
 tous les départements métropolitains depuis
 [cadastre.data.gouv.fr](https://cadastre.data.gouv.fr) (données Etalab),
-calcule le **centroïde** de chaque polygone, applique un **nettoyage
+calcule pour chaque polygone un **point représentatif** (garanti à l'intérieur
+de la géométrie), applique un **nettoyage
 orthographique des noms** (underscores, espaces multiples, apostrophes et
 tirets espacés — ex. `L ' ETANG` → `L'ETANG`, `SAINT - JEAN` → `SAINT-JEAN`)
 et empile le tout dans un unique **GeoPackage de points**.
@@ -21,8 +22,11 @@ ignorés sans interrompre le traitement.
 ## Traitement
 
 - Téléchargement et **décompression gzip en mémoire** (aucun fichier temporaire)
-- Centroïdes calculés en **Lambert-93 (EPSG:2154)** puis reprojetés en
-  **WGS84 (EPSG:4326)** — calcul géométriquement correct
+- **Point représentatif** calculé via `representative_point()`
+  ([GeoPandas](https://geopandas.org/en/stable/docs/reference/api/geopandas.GeoSeries.representative_point.html)
+  / Shapely / GEOS `InteriorPointArea`) : le point est **garanti à l'intérieur**
+  du polygone, contrairement au centroïde qui peut tomber hors d'une géométrie
+  concave ou multipartie. Sortie en **WGS84 (EPSG:4326)**
 - **Nettoyage orthographique des noms** (casse d'origine préservée), écrit dans
   une nouvelle colonne `nom_clean` (le `nom` brut est conservé) :
   - underscores → espace : `CHAUSSEE_COULAZ` → `CHAUSSEE COULAZ`
